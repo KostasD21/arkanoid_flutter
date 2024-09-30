@@ -107,54 +107,60 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   void _checkCollisions() {
-    final size = MediaQuery.of(context).size;
-  
-    // Ball-Wall collisions
-    if (ballPosition.dx - ballRadius <= -size.width / 2 ||
-        ballPosition.dx + ballRadius >= size.width / 2) {
-      ballVelocity = Offset(-ballVelocity.dx, ballVelocity.dy);
-    }
-    if (ballPosition.dy - ballRadius <= -size.height / 2) {
-      ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy);
-    }
-  
-    // Ball-Paddle collision
-    double paddleTop = size.height / 2 - paddleHeight - 30;
-    double paddleLeft = paddlePosition - paddleWidth / 2;
-    double paddleRight = paddlePosition + paddleWidth / 2;
-  
-    if (ballPosition.dx >= paddleLeft && ballPosition.dx <= paddleRight) {
-      if (ballPosition.dy + ballRadius >= paddleTop &&
-          ballPosition.dy <= paddleTop + paddleHeight) {
-        
-        ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy.abs());
-        
-        double hitPosition = (ballPosition.dx - paddleLeft) / paddleWidth;
-        double newAngle = (hitPosition - 0.5) * math.pi / 3; // -30 to 30 degrees
-        double speed = ballVelocity.distance;
-        ballVelocity = Offset(speed * math.sin(newAngle), -speed * math.cos(newAngle));
-        
-        ballPosition = Offset(ballPosition.dx, paddleTop - ballRadius);
-      }
-    }
+  final size = MediaQuery.of(context).size;
 
-    // Ball-Brick collisions
-    for (var brick in bricks) {
-      if (brick.isVisible) {
-        if (_ballIntersectsBrick(brick)) {
-          brick.isVisible = false;
-          // Reverse ball direction
-          ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy);
-          break; // Assume the ball can only hit one brick per frame
-        }
+  // Ball-Wall collisions
+  if (ballPosition.dx - ballRadius <= -size.width / 2 ||
+      ballPosition.dx + ballRadius >= size.width / 2) {
+    ballVelocity = Offset(-ballVelocity.dx, ballVelocity.dy);
+  }
+  if (ballPosition.dy - ballRadius <= -size.height / 2) {
+    ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy);
+  }
+
+  // Ball-Paddle collision
+  double paddleTop = size.height / 2 - paddleHeight - 50;
+  double paddleLeft = paddlePosition - paddleWidth / 2;
+  double paddleRight = paddlePosition + paddleWidth / 2;
+
+  // Calculate the bottom of the ball
+  double ballBottom = ballPosition.dy + ballRadius;
+
+  // Check if the bottom of the ball is at or below the top of the paddle,
+  // and if the ball's center is within the paddle's width
+  if (ballBottom >= paddleTop && ballBottom <= paddleTop + paddleHeight &&
+      ballPosition.dx >= paddleLeft && ballPosition.dx <= paddleRight) {
+    
+    // Reverse the vertical direction
+    ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy.abs());
+    
+    // Adjust horizontal velocity based on where the ball hit the paddle
+    double hitPosition = (ballPosition.dx - paddleLeft) / paddleWidth;
+    double newAngle = (hitPosition - 0.5) * math.pi / 3; // -30 to 30 degrees
+    double speed = ballVelocity.distance;
+    ballVelocity = Offset(speed * math.sin(newAngle), -speed * math.cos(newAngle));
+    
+    // Ensure the ball is above the paddle
+    ballPosition = Offset(ballPosition.dx, paddleTop - ballRadius);
+  }
+
+  // Ball-Brick collisions
+  for (var brick in bricks) {
+    if (brick.isVisible) {
+      if (_ballIntersectsBrick(brick)) {
+        brick.isVisible = false;
+        // Reverse ball direction
+        ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy);
+        break; // Assume the ball can only hit one brick per frame
       }
-    }
-  
-    // Ball falls below paddle
-    if (ballPosition.dy + ballRadius > size.height / 2) {
-      _initializeGame();
     }
   }
+
+  // Ball falls below paddle
+  if (ballPosition.dy + ballRadius > size.height / 2) {
+    _initializeGame();
+  }
+}
 
   bool _ballIntersectsBrick(Brick brick) {
     final ballRect = Rect.fromCircle(
