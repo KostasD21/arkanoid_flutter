@@ -20,6 +20,14 @@ class GameScreen extends StatefulWidget {
   _GameScreenState createState() => _GameScreenState();
 }
 
+class Brick {
+  final Rect rect;
+  final Color color;
+  bool isVisible;
+
+  Brick(this.rect, this.color, {this.isVisible = true});
+}
+
 class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   double paddlePosition = 0.0;
   double paddleWidth = 80.0;
@@ -33,10 +41,15 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   late AnimationController _animationController;
   FocusNode _focusNode = FocusNode();
 
+  List<Brick> bricks = [];
+  int rows = 5;
+  int columns = 8;
+
+  bool _isInitialized = false;
+
   @override
   void initState() {
     super.initState();
-    _initializeGame();
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
@@ -45,14 +58,45 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_isInitialized) {
+      _initializeGame();
+      _isInitialized = true;
+    }
+  }
+
+  @override
   void dispose() {
     _animationController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
   void _initializeGame() {
     paddlePosition = 0.0;
     ballPosition = Offset(0, -50); // Start the ball above the paddle
+    _initializeBricks();
+  }
+
+  void _initializeBricks() {
+    bricks.clear();
+    final size = MediaQuery.of(context).size;
+    double brickWidth = size.width / columns;
+    double brickHeight = 30.0;
+    for (int i = 0; i < rows; i++) {
+      for (int j = 0; j < columns; j++) {
+        bricks.add(Brick(
+          Rect.fromLTWH(
+            j * brickWidth,
+            i * brickHeight + 50, // Start 50 pixels from the top
+            brickWidth,
+            brickHeight,
+          ),
+          Colors.primaries[i % Colors.primaries.length],
+        ));
+      }
+    }
   }
 
   void _updateGame() {
@@ -64,7 +108,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   void _checkCollisions() {
     final size = MediaQuery.of(context).size;
-    
+  
     // Ball-Wall collisions
     if (ballPosition.dx - ballRadius <= -size.width / 2 ||
         ballPosition.dx + ballRadius >= size.width / 2) {
@@ -73,20 +117,52 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     if (ballPosition.dy - ballRadius <= -size.height / 2) {
       ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy);
     }
-    
+  
     // Ball-Paddle collision
-    if (ballPosition.dy + ballRadius >= size.height / 2 - paddleHeight - 30) {
-      if (ballPosition.dx >= paddlePosition - paddleWidth / 2 &&
-          ballPosition.dx <= paddlePosition + paddleWidth / 2) {
-        ballVelocity = Offset(
-          (ballPosition.dx - paddlePosition) / (paddleWidth / 2) * 5,
-          -ballVelocity.dy.abs()
-        );
-      } else if (ballPosition.dy > size.height / 2) {
-        // Ball fell below paddle, reset the game
-        _initializeGame();
+    double paddleTop = size.height / 2 - paddleHeight - 30;
+    double paddleLeft = paddlePosition - paddleWidth / 2;
+    double paddleRight = paddlePosition + paddleWidth / 2;
+  
+    if (ballPosition.dx >= paddleLeft && ballPosition.dx <= paddleRight) {
+      if (ballPosition.dy + ballRadius >= paddleTop &&
+          ballPosition.dy <= paddleTop + paddleHeight) {
+        
+        ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy.abs());
+        
+        double hitPosition = (ballPosition.dx - paddleLeft) / paddleWidth;
+        double newAngle = (hitPosition - 0.5) * math.pi / 3; // -30 to 30 degrees
+        double speed = ballVelocity.distance;
+        ballVelocity = Offset(speed * math.sin(newAngle), -speed * math.cos(newAngle));
+        
+        ballPosition = Offset(ballPosition.dx, paddleTop - ballRadius);
       }
     }
+
+    // Ball-Brick collisions
+    for (var brick in bricks) {
+      if (brick.isVisible) {
+        if (_ballIntersectsBrick(brick)) {
+          brick.isVisible = false;
+          // Reverse ball direction
+          ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy);
+          break; // Assume the ball can only hit one brick per frame
+        }
+      }
+    }
+  
+    // Ball falls below paddle
+    if (ballPosition.dy + ballRadius > size.height / 2) {
+      _initializeGame();
+    }
+  }
+
+  bool _ballIntersectsBrick(Brick brick) {
+    final ballRect = Rect.fromCircle(
+      center: Offset(MediaQuery.of(context).size.width / 2 + ballPosition.dx, 
+                     MediaQuery.of(context).size.height / 2 + ballPosition.dy),
+      radius: ballRadius,
+    );
+    return ballRect.overlaps(brick.rect);
   }
 
   void _handleKeyEvent(RawKeyEvent event) {
@@ -132,6 +208,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               paddleHeight: paddleHeight,
               ballPosition: ballPosition,
               ballRadius: ballRadius,
+              bricks: bricks,
             ),
             child: Container(),
           ),
@@ -147,6 +224,7 @@ class GamePainter extends CustomPainter {
   final double paddleHeight;
   final Offset ballPosition;
   final double ballRadius;
+  final List<Brick> bricks;
 
   GamePainter({
     required this.paddlePosition,
@@ -154,15 +232,24 @@ class GamePainter extends CustomPainter {
     required this.paddleHeight,
     required this.ballPosition,
     required this.ballRadius,
+    required this.bricks,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.blue
       ..style = PaintingStyle.fill;
 
+    // Draw bricks
+    for (var brick in bricks) {
+      if (brick.isVisible) {
+        paint.color = brick.color;
+        canvas.drawRect(brick.rect, paint);
+      }
+    }
+
     // Draw paddle
+    paint.color = Colors.blue;
     final paddleRect = RRect.fromRectAndRadius(
       Rect.fromCenter(
         center: Offset(size.width / 2 + paddlePosition, size.height - 30),
@@ -184,5 +271,6 @@ class GamePainter extends CustomPainter {
   @override
   bool shouldRepaint(GamePainter oldDelegate) =>
       oldDelegate.paddlePosition != paddlePosition ||
-      oldDelegate.ballPosition != ballPosition;
+      oldDelegate.ballPosition != ballPosition ||
+      oldDelegate.bricks != bricks;
 }
