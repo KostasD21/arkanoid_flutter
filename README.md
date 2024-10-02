@@ -2,6 +2,8 @@
 
 A new Flutter project.
 
+![alt text](https://www.c64-wiki.com/images/thumb/6/60/Arkanoid-title.png/300px-Arkanoid-title.png)
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
