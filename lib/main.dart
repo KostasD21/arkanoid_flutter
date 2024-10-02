@@ -164,8 +164,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   bool _ballIntersectsBrick(Brick brick) {
     final ballRect = Rect.fromCircle(
-      center: Offset(MediaQuery.of(context).size.width / 2 + ballPosition.dx, 
-                     MediaQuery.of(context).size.height / 2 + ballPosition.dy),
+      center: Offset(MediaQuery.of(context).size.width / 2.1 + ballPosition.dx, 
+                     MediaQuery.of(context).size.height / 2.1 + ballPosition.dy),
       radius: ballRadius,
     );
     return ballRect.overlaps(brick.rect);
