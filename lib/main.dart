@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
+import 'package:audioplayers/audioplayers.dart';
 
 void main() => runApp(ArcanoidGame());
 
@@ -47,6 +48,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   bool _isInitialized = false;
 
+  late AudioPlayer effectPlayer;
+  late AudioPlayer musicPlayer;
+
+  double musicVolume = 0.5; // Add this line to set initial volume to 50%
+
+
   @override
   void initState() {
     super.initState();
@@ -55,6 +62,15 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       duration: const Duration(seconds: 1),
     )..repeat();
     _animationController.addListener(_updateGame);
+    effectPlayer = AudioPlayer();
+    musicPlayer = AudioPlayer();
+    _playBackgroundMusic();
+  }
+
+  void _playBackgroundMusic() async {
+    await musicPlayer.setReleaseMode(ReleaseMode.loop);  // Set the music to loop
+    await musicPlayer.setVolume(musicVolume);
+    await musicPlayer.play(AssetSource('background_music.mp3'));  // Play the background music
   }
 
   @override
@@ -70,6 +86,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   void dispose() {
     _animationController.dispose();
     _focusNode.dispose();
+    effectPlayer.dispose();
+    musicPlayer.dispose();
     super.dispose();
   }
 
@@ -82,18 +100,20 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   void _initializeBricks() {
     bricks.clear();
     final size = MediaQuery.of(context).size;
-    double brickWidth = size.width / columns;
-    double brickHeight = 30.0;
+    double brickWidth = (size.width - (columns + 1) * 2) / columns; // Account for gaps
+    double brickHeight = 25.0;
+    double gap = 2.0; // Gap between bricks
+
     for (int i = 0; i < rows; i++) {
       for (int j = 0; j < columns; j++) {
         bricks.add(Brick(
           Rect.fromLTWH(
-            j * brickWidth,
-            i * brickHeight + 50, // Start 50 pixels from the top
+            j * (brickWidth + gap) + gap,
+            i * (brickHeight + gap) + 50, // Start 50 pixels from the top
             brickWidth,
             brickHeight,
           ),
-          Colors.primaries[i % Colors.primaries.length],
+          Colors.primaries[(i * columns + j) % Colors.primaries.length],
         ));
       }
     }
@@ -107,60 +127,62 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   void _checkCollisions() {
-  final size = MediaQuery.of(context).size;
+    final size = MediaQuery.of(context).size;
 
-  // Ball-Wall collisions
-  if (ballPosition.dx - ballRadius <= -size.width / 2 ||
-      ballPosition.dx + ballRadius >= size.width / 2) {
-    ballVelocity = Offset(-ballVelocity.dx, ballVelocity.dy);
-  }
-  if (ballPosition.dy - ballRadius <= -size.height / 2) {
-    ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy);
-  }
+    // Ball-Wall collisions
+    if (ballPosition.dx - ballRadius <= -size.width / 2 ||
+        ballPosition.dx + ballRadius >= size.width / 2) {
+      ballVelocity = Offset(-ballVelocity.dx, ballVelocity.dy);
+    }
+    if (ballPosition.dy - ballRadius <= -size.height / 2) {
+      ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy);
+    }
 
-  // Ball-Paddle collision
-  double paddleTop = size.height / 2 - paddleHeight - 50;
-  double paddleLeft = paddlePosition - paddleWidth / 2;
-  double paddleRight = paddlePosition + paddleWidth / 2;
+    // Ball-Paddle collision
+    double paddleTop = size.height / 2 - paddleHeight - 50;
+    double paddleLeft = paddlePosition - paddleWidth / 2;
+    double paddleRight = paddlePosition + paddleWidth / 2;
 
-  // Calculate the bottom of the ball
-  double ballBottom = ballPosition.dy + ballRadius;
+    // Calculate the bottom of the ball
+    double ballBottom = ballPosition.dy + ballRadius;
 
-  // Check if the bottom of the ball is at or below the top of the paddle,
-  // and if the ball's center is within the paddle's width
-  if (ballBottom >= paddleTop && ballBottom <= paddleTop + paddleHeight &&
-      ballPosition.dx >= paddleLeft && ballPosition.dx <= paddleRight) {
-    
-    // Reverse the vertical direction
-    ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy.abs());
-    
-    // Adjust horizontal velocity based on where the ball hit the paddle
-    double hitPosition = (ballPosition.dx - paddleLeft) / paddleWidth;
-    double newAngle = (hitPosition - 0.5) * math.pi / 3; // -30 to 30 degrees
-    double speed = ballVelocity.distance;
-    ballVelocity = Offset(speed * math.sin(newAngle), -speed * math.cos(newAngle));
-    
-    // Ensure the ball is above the paddle
-    ballPosition = Offset(ballPosition.dx, paddleTop - ballRadius);
-  }
+    // Check if the bottom of the ball is at or below the top of the paddle,
+    // and if the ball's center is within the paddle's width
+    if (ballBottom >= paddleTop && ballBottom <= paddleTop + paddleHeight &&
+        ballPosition.dx >= paddleLeft && ballPosition.dx <= paddleRight) {
+      
+      // Reverse the vertical direction
+      ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy.abs());
+      
+      // Adjust horizontal velocity based on where the ball hit the paddle
+      double hitPosition = (ballPosition.dx - paddleLeft) / paddleWidth;
+      double newAngle = (hitPosition - 0.5) * math.pi / 3; // -30 to 30 degrees
+      double speed = ballVelocity.distance;
+      ballVelocity = Offset(speed * math.sin(newAngle), -speed * math.cos(newAngle));
+      
+      // Ensure the ball is above the paddle
+      ballPosition = Offset(ballPosition.dx, paddleTop - ballRadius);
+    }
 
-  // Ball-Brick collisions
-  for (var brick in bricks) {
-    if (brick.isVisible) {
-      if (_ballIntersectsBrick(brick)) {
-        brick.isVisible = false;
-        // Reverse ball direction
-        ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy);
-        break; // Assume the ball can only hit one brick per frame
+    // Ball-Brick collisions
+    for (var brick in bricks) {
+      if (brick.isVisible) {
+        if (_ballIntersectsBrick(brick)) {
+          brick.isVisible = false;
+          // Play sound when brick is destroyed
+          effectPlayer.play(AssetSource('brick_break.mp3'));
+          // Reverse ball direction
+          ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy);
+          break; // Assume the ball can only hit one brick per frame
+        }
       }
     }
-  }
 
-  // Ball falls below paddle
-  if (ballPosition.dy + ballRadius > size.height / 2) {
-    _initializeGame();
+    // Ball falls below paddle
+    if (ballPosition.dy + ballRadius > size.height / 2) {
+      _initializeGame();
+    }
   }
-}
 
   bool _ballIntersectsBrick(Brick brick) {
     final ballRect = Rect.fromCircle(
@@ -249,8 +271,16 @@ class GamePainter extends CustomPainter {
     // Draw bricks
     for (var brick in bricks) {
       if (brick.isVisible) {
+        // Draw brick fill
         paint.color = brick.color;
         canvas.drawRect(brick.rect, paint);
+
+        // Draw brick border
+        paint.color = Colors.black;
+        paint.style = PaintingStyle.stroke;
+        paint.strokeWidth = 1.0;
+        canvas.drawRect(brick.rect, paint);
+        paint.style = PaintingStyle.fill;
       }
     }
 
