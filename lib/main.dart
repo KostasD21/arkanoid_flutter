@@ -3,7 +3,15 @@ import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 
-void main() => runApp(ArcanoidGame());
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]).then((_) {
+    runApp(ArcanoidGame());
+  });
+}
 
 class ArcanoidGame extends StatelessWidget {
   @override
