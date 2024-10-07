@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,7 +20,93 @@ class ArcanoidGame extends StatelessWidget {
     return MaterialApp(
       title: 'Arcanoid Game',
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: GameScreen(),
+      home: MainMenu(),
+    );
+  }
+}
+
+class MainMenu extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Arcanoid Game')),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            ElevatedButton(
+              child: Text('Start Game'),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => GameScreen()),
+                );
+              },
+            ),
+            SizedBox(height: 20),
+            ElevatedButton(
+              child: Text('Settings'),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => SettingsScreen()),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SettingsScreen extends StatefulWidget {
+  @override
+  _SettingsScreenState createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool isMusicOn = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      isMusicOn = prefs.getBool('isMusicOn') ?? true;
+    });
+  }
+
+  _saveSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isMusicOn', isMusicOn);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Settings')),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Text('Music'),
+            Switch(
+              value: isMusicOn,
+              onChanged: (value) {
+                setState(() {
+                  isMusicOn = value;
+                });
+                _saveSettings();
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -64,6 +151,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   int lives = 3;
   int maxLevels = 3;
 
+  bool isMusicOn = true;
+
   @override
   void initState() {
     super.initState();
@@ -74,7 +163,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _animationController.addListener(_updateGame);
     effectPlayer = AudioPlayer();
     musicPlayer = AudioPlayer();
-    _playBackgroundMusic();
+    _loadSettings();
+  }
+
+  _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      isMusicOn = prefs.getBool('isMusicOn') ?? true;
+    });
+    if (isMusicOn) {
+      _playBackgroundMusic();
+    }
   }
 
   void _playBackgroundMusic() async {
@@ -314,7 +413,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Arcanoid Game - Level $currentLevel')),
+      appBar: AppBar(
+        title: Text('Arcanoid Game - Level $currentLevel'),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: () {
+            _animationController.stop();
+            musicPlayer.stop();
+            Navigator.of(context).pop();
+          },
+        ),
+      ),
       body: RawKeyboardListener(
         focusNode: _focusNode,
         onKey: _handleKeyEvent,
@@ -359,6 +468,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 }
+
+// ... [Previous code remains unchanged] ...
 
 class GamePainter extends CustomPainter {
   final double paddlePosition;
@@ -409,6 +520,7 @@ class GamePainter extends CustomPainter {
     canvas.drawRRect(paddleRect, paint);
 
     // Draw ball
+    paint.color = Colors.red;
     canvas.drawCircle(
       Offset(size.width / 2 + ballPosition.dx, size.height / 2 + ballPosition.dy),
       ballRadius,
