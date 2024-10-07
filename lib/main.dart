@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:ui' as ui;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -150,12 +151,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   int currentLevel = 1;
   int lives = 3;
   int maxLevels = 3;
+  int score = 0;
 
   bool isMusicOn = true;
+
+  ui.Image? ballImage;
+  ui.Image? paddleImage;
 
   @override
   void initState() {
     super.initState();
+    _loadImages();
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
@@ -164,6 +170,20 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     effectPlayer = AudioPlayer();
     musicPlayer = AudioPlayer();
     _loadSettings();
+  }
+
+  Future<void> _loadImages() async {
+    ballImage = await _loadImage('assets/metal_ball.jpeg');
+    paddleImage = await _loadImage('assets/paddle_1.jpg');
+    setState(() {}); // Trigger a rebuild once images are loaded
+  }
+
+  Future<ui.Image> _loadImage(String assetPath) async {
+    final ByteData data = await rootBundle.load(assetPath);
+    final Uint8List bytes = data.buffer.asUint8List();
+    final ui.Codec codec = await ui.instantiateImageCodec(bytes);
+    final ui.FrameInfo fi = await codec.getNextFrame();
+    return fi.image;
   }
 
   _loadSettings() async {
@@ -206,6 +226,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _initializeBricks();
     lives = 3;
     currentLevel = 1;
+    score = 0;
     _resetBall();
   }
 
@@ -292,6 +313,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           brick.isVisible = false;
           effectPlayer.play(AssetSource('brick_break.mp3'));
           ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy);
+          score += 10;
           break;
         }
       }
@@ -322,7 +344,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       builder: (BuildContext context) {
         return AlertDialog(
           title: Text('Game Over'),
-          content: Text('You have lost all your lives. Try again?'),
+          content: Text('You have lost all your lives. Final score: $score'),
           actions: <Widget>[
             TextButton(
               child: Text('Restart'),
@@ -364,7 +386,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       builder: (BuildContext context) {
         return AlertDialog(
           title: Text('Congratulations!'),
-          content: Text('You have completed all levels!'),
+          content: Text('You have completed all levels! Final score: $score'),
           actions: <Widget>[
             TextButton(
               child: Text('Play Again'),
@@ -424,52 +446,62 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           },
         ),
       ),
-      body: RawKeyboardListener(
-        focusNode: _focusNode,
-        onKey: _handleKeyEvent,
-        autofocus: true,
-        child: GestureDetector(
-          onHorizontalDragUpdate: (details) {
-            setState(() {
-              paddlePosition += details.delta.dx;
-              _clampPaddlePosition();
-            });
-          },
-          child: Stack(
-            children: [
-              CustomPaint(
-                painter: GamePainter(
-                  paddlePosition: paddlePosition,
-                  paddleWidth: paddleWidth,
-                  paddleHeight: paddleHeight,
-                  ballPosition: ballPosition,
-                  ballRadius: ballRadius,
-                  bricks: bricks,
-                ),
-                child: Container(),
-              ),
-              Positioned(
-                top: 10,
-                left: 10,
-                child: Row(
-                  children: List.generate(
-                    lives,
-                    (index) => Padding(
-                      padding: const EdgeInsets.all(2.0),
-                      child: Icon(Icons.sports_baseball, color: Colors.red, size: 20),
+      body: ballImage == null || paddleImage == null
+          ? Center(child: CircularProgressIndicator())
+          : RawKeyboardListener(
+              focusNode: _focusNode,
+              onKey: _handleKeyEvent,
+              autofocus: true,
+              child: GestureDetector(
+                onHorizontalDragUpdate: (details) {
+                  setState(() {
+                    paddlePosition += details.delta.dx;
+                    _clampPaddlePosition();
+                  });
+                },
+                child: Stack(
+                  children: [
+                    CustomPaint(
+                      painter: GamePainter(
+                        paddlePosition: paddlePosition,
+                        paddleWidth: paddleWidth,
+                        paddleHeight: paddleHeight,
+                        ballPosition: ballPosition,
+                        ballRadius: ballRadius,
+                        bricks: bricks,
+                        ballImage: ballImage!,
+                        paddleImage: paddleImage!,
+                      ),
+                      child: Container(),
                     ),
-                  ),
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Row(
+                        children: List.generate(
+                          lives,
+                          (index) => Padding(
+                            padding: const EdgeInsets.all(2.0),
+                            child: Icon(Icons.sports_baseball, color: Colors.red, size: 20),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Text(
+                        'Score: $score',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 }
-
-// ... [Previous code remains unchanged] ...
 
 class GamePainter extends CustomPainter {
   final double paddlePosition;
@@ -478,6 +510,8 @@ class GamePainter extends CustomPainter {
   final Offset ballPosition;
   final double ballRadius;
   final List<Brick> bricks;
+  final ui.Image ballImage;
+  final ui.Image paddleImage;
 
   GamePainter({
     required this.paddlePosition,
@@ -486,6 +520,8 @@ class GamePainter extends CustomPainter {
     required this.ballPosition,
     required this.ballRadius,
     required this.bricks,
+    required this.ballImage,
+    required this.paddleImage,
   });
 
   @override
@@ -508,22 +544,28 @@ class GamePainter extends CustomPainter {
     }
 
     // Draw paddle
-    paint.color = Colors.blue;
-    final paddleRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(size.width / 2 + paddlePosition, size.height - 30),
-        width: paddleWidth,
-        height: paddleHeight,
-      ),
-      Radius.circular(8),
+    final paddleRect = Rect.fromCenter(
+      center: Offset(size.width / 2 + paddlePosition, size.height - 30),
+      width: paddleWidth,
+      height: paddleHeight,
     );
-    canvas.drawRRect(paddleRect, paint);
+    canvas.drawImageRect(
+      paddleImage,
+      Rect.fromLTWH(0, 0, paddleImage.width.toDouble(), paddleImage.height.toDouble()),
+      paddleRect,
+      paint,
+    );
 
     // Draw ball
-    paint.color = Colors.red;
-    canvas.drawCircle(
-      Offset(size.width / 2 + ballPosition.dx, size.height / 2 + ballPosition.dy),
-      ballRadius,
+    final ballRect = Rect.fromCenter(
+      center: Offset(size.width / 2 + ballPosition.dx, size.height / 2 + ballPosition.dy),
+      width: ballRadius * 2,
+      height: ballRadius * 2,
+    );
+    canvas.drawImageRect(
+      ballImage,
+      Rect.fromLTWH(0, 0, ballImage.width.toDouble(), ballImage.height.toDouble()),
+      ballRect,
       paint,
     );
   }
