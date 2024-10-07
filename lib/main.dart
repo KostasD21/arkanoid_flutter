@@ -45,13 +45,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   
   Offset ballPosition = Offset.zero;
   double ballRadius = 10.0;
-  Offset ballVelocity = Offset(3, -3);
+  Offset ballVelocity = Offset(3, 3);  // Initial downward direction
   
   late AnimationController _animationController;
   FocusNode _focusNode = FocusNode();
 
   List<Brick> bricks = [];
-  int rows = 5;
   int columns = 8;
 
   bool _isInitialized = false;
@@ -59,8 +58,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   late AudioPlayer effectPlayer;
   late AudioPlayer musicPlayer;
 
-  double musicVolume = 0.5; // Add this line to set initial volume to 50%
+  double musicVolume = 0.5;
 
+  int currentLevel = 1;
+  int lives = 3;
+  int maxLevels = 3;
 
   @override
   void initState() {
@@ -76,9 +78,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   void _playBackgroundMusic() async {
-    await musicPlayer.setReleaseMode(ReleaseMode.loop);  // Set the music to loop
+    await musicPlayer.setReleaseMode(ReleaseMode.loop);
     await musicPlayer.setVolume(musicVolume);
-    await musicPlayer.play(AssetSource('background_music.mp3'));  // Play the background music
+    await musicPlayer.play(AssetSource('background_music.mp3'));
   }
 
   @override
@@ -101,23 +103,41 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   void _initializeGame() {
     paddlePosition = 0.0;
-    ballPosition = Offset(0, -50); // Start the ball above the paddle
+    ballPosition = Offset(0, -50);
     _initializeBricks();
+    lives = 3;
+    currentLevel = 1;
+    _resetBall();
   }
 
   void _initializeBricks() {
     bricks.clear();
     final size = MediaQuery.of(context).size;
-    double brickWidth = (size.width - (columns + 1) * 2) / columns; // Account for gaps
+    double brickWidth = (size.width - (columns + 1) * 2) / columns;
     double brickHeight = 25.0;
-    double gap = 2.0; // Gap between bricks
+    double gap = 2.0;
+
+    int rows;
+    switch (currentLevel) {
+      case 1:
+        rows = 3;
+        break;
+      case 2:
+        rows = 4;
+        break;
+      case 3:
+        rows = 5;
+        break;
+      default:
+        rows = 3;
+    }
 
     for (int i = 0; i < rows; i++) {
       for (int j = 0; j < columns; j++) {
         bricks.add(Brick(
           Rect.fromLTWH(
             j * (brickWidth + gap) + gap,
-            i * (brickHeight + gap) + 50, // Start 50 pixels from the top
+            i * (brickHeight + gap) + 50,
             brickWidth,
             brickHeight,
           ),
@@ -131,6 +151,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     setState(() {
       ballPosition += ballVelocity;
       _checkCollisions();
+      _checkLevelCompletion();
     });
   }
 
@@ -151,24 +172,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     double paddleLeft = paddlePosition - paddleWidth / 2;
     double paddleRight = paddlePosition + paddleWidth / 2;
 
-    // Calculate the bottom of the ball
     double ballBottom = ballPosition.dy + ballRadius;
 
-    // Check if the bottom of the ball is at or below the top of the paddle,
-    // and if the ball's center is within the paddle's width
     if (ballBottom >= paddleTop && ballBottom <= paddleTop + paddleHeight &&
         ballPosition.dx >= paddleLeft && ballPosition.dx <= paddleRight) {
-      
-      // Reverse the vertical direction
       ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy.abs());
       
-      // Adjust horizontal velocity based on where the ball hit the paddle
       double hitPosition = (ballPosition.dx - paddleLeft) / paddleWidth;
-      double newAngle = (hitPosition - 0.5) * math.pi / 3; // -30 to 30 degrees
+      double newAngle = (hitPosition - 0.5) * math.pi / 3;
       double speed = ballVelocity.distance;
       ballVelocity = Offset(speed * math.sin(newAngle), -speed * math.cos(newAngle));
       
-      // Ensure the ball is above the paddle
       ballPosition = Offset(ballPosition.dx, paddleTop - ballRadius);
     }
 
@@ -177,19 +191,94 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       if (brick.isVisible) {
         if (_ballIntersectsBrick(brick)) {
           brick.isVisible = false;
-          // Play sound when brick is destroyed
           effectPlayer.play(AssetSource('brick_break.mp3'));
-          // Reverse ball direction
           ballVelocity = Offset(ballVelocity.dx, -ballVelocity.dy);
-          break; // Assume the ball can only hit one brick per frame
+          break;
         }
       }
     }
 
     // Ball falls below paddle
     if (ballPosition.dy + ballRadius > size.height / 2) {
-      _initializeGame();
+      lives--;
+      if (lives > 0) {
+        _resetBall();
+      } else {
+        _gameOver();
+      }
     }
+  }
+
+  void _resetBall() {
+    setState(() {
+      ballPosition = Offset(0, -50);
+      ballVelocity = Offset(3, 3);  // Ensure downward direction
+    });
+  }
+
+  void _gameOver() {
+    _animationController.stop();
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Game Over'),
+          content: Text('You have lost all your lives. Try again?'),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Restart'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _initializeGame();
+                _animationController.repeat();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _checkLevelCompletion() {
+    if (bricks.every((brick) => !brick.isVisible)) {
+      if (currentLevel < maxLevels) {
+        _nextLevel();
+      } else {
+        _victoryScreen();
+      }
+    }
+  }
+
+  void _nextLevel() {
+    currentLevel++;
+    lives = 3;
+    _resetBall();
+    _initializeBricks();
+    // Increase ball speed for higher difficulty, maintaining downward direction
+    ballVelocity = Offset(ballVelocity.dx * 1.2, ballVelocity.dy.abs() * 1.2);
+  }
+
+  void _victoryScreen() {
+    _animationController.stop();
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Congratulations!'),
+          content: Text('You have completed all levels!'),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Play Again'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _initializeGame();
+                _animationController.repeat();
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   bool _ballIntersectsBrick(Brick brick) {
@@ -225,7 +314,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Arcanoid Game')),
+      appBar: AppBar(title: Text('Arcanoid Game - Level $currentLevel')),
       body: RawKeyboardListener(
         focusNode: _focusNode,
         onKey: _handleKeyEvent,
@@ -237,16 +326,33 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               _clampPaddlePosition();
             });
           },
-          child: CustomPaint(
-            painter: GamePainter(
-              paddlePosition: paddlePosition,
-              paddleWidth: paddleWidth,
-              paddleHeight: paddleHeight,
-              ballPosition: ballPosition,
-              ballRadius: ballRadius,
-              bricks: bricks,
-            ),
-            child: Container(),
+          child: Stack(
+            children: [
+              CustomPaint(
+                painter: GamePainter(
+                  paddlePosition: paddlePosition,
+                  paddleWidth: paddleWidth,
+                  paddleHeight: paddleHeight,
+                  ballPosition: ballPosition,
+                  ballRadius: ballRadius,
+                  bricks: bricks,
+                ),
+                child: Container(),
+              ),
+              Positioned(
+                top: 10,
+                left: 10,
+                child: Row(
+                  children: List.generate(
+                    lives,
+                    (index) => Padding(
+                      padding: const EdgeInsets.all(2.0),
+                      child: Icon(Icons.sports_baseball, color: Colors.red, size: 20),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -279,11 +385,9 @@ class GamePainter extends CustomPainter {
     // Draw bricks
     for (var brick in bricks) {
       if (brick.isVisible) {
-        // Draw brick fill
         paint.color = brick.color;
         canvas.drawRect(brick.rect, paint);
 
-        // Draw brick border
         paint.color = Colors.black;
         paint.style = PaintingStyle.stroke;
         paint.strokeWidth = 1.0;
