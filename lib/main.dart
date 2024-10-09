@@ -173,8 +173,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadImages() async {
-    ballImage = await _loadImage('assets/metal_ball.jpeg');
-    paddleImage = await _loadImage('assets/paddle_1.jpg');
     setState(() {}); // Trigger a rebuild once images are loaded
   }
 
@@ -446,9 +444,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           },
         ),
       ),
-      body: ballImage == null || paddleImage == null
-          ? Center(child: CircularProgressIndicator())
-          : RawKeyboardListener(
+      body: RawKeyboardListener(
               focusNode: _focusNode,
               onKey: _handleKeyEvent,
               autofocus: true,
@@ -468,9 +464,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                         paddleHeight: paddleHeight,
                         ballPosition: ballPosition,
                         ballRadius: ballRadius,
-                        bricks: bricks,
-                        ballImage: ballImage!,
-                        paddleImage: paddleImage!,
+                        bricks: bricks
                       ),
                       child: Container(),
                     ),
@@ -510,8 +504,6 @@ class GamePainter extends CustomPainter {
   final Offset ballPosition;
   final double ballRadius;
   final List<Brick> bricks;
-  final ui.Image ballImage;
-  final ui.Image paddleImage;
 
   GamePainter({
     required this.paddlePosition,
@@ -520,8 +512,6 @@ class GamePainter extends CustomPainter {
     required this.ballPosition,
     required this.ballRadius,
     required this.bricks,
-    required this.ballImage,
-    required this.paddleImage,
   });
 
   @override
@@ -543,31 +533,101 @@ class GamePainter extends CustomPainter {
       }
     }
 
-    // Draw paddle
+    // Draw metallic paddle
     final paddleRect = Rect.fromCenter(
       center: Offset(size.width / 2 + paddlePosition, size.height - 30),
       width: paddleWidth,
       height: paddleHeight,
     );
-    canvas.drawImageRect(
-      paddleImage,
-      Rect.fromLTWH(0, 0, paddleImage.width.toDouble(), paddleImage.height.toDouble()),
-      paddleRect,
-      paint,
+    _drawMetallicPaddle(canvas, paddleRect);
+
+    // Draw metallic ball
+    final ballCenter = Offset(size.width / 2 + ballPosition.dx, size.height / 2 + ballPosition.dy);
+    _drawMetallicBall(canvas, ballCenter, ballRadius);
+  }
+
+  void _drawMetallicPaddle(Canvas canvas, Rect rect) {
+    // Base metallic color
+    final baseColor = Color(0xFF8E8E8E);
+
+    // Gradient for metallic effect
+    final gradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        baseColor.withOpacity(0.9),
+        baseColor,
+        baseColor.withOpacity(0.8),
+      ],
+      stops: [0.0, 0.5, 1.0],
     );
 
-    // Draw ball
-    final ballRect = Rect.fromCenter(
-      center: Offset(size.width / 2 + ballPosition.dx, size.height / 2 + ballPosition.dy),
-      width: ballRadius * 2,
-      height: ballRadius * 2,
+    // Draw main paddle body
+    final paint = Paint()
+      ..shader = gradient.createShader(rect)
+      ..style = PaintingStyle.fill;
+    
+    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(paddleHeight / 2));
+    canvas.drawRRect(rrect, paint);
+
+    // Add highlight
+    final highlightPaint = Paint()
+      ..color = Colors.white.withOpacity(0.4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    
+    final highlightRect = rect.deflate(2);
+    final highlightRRect = RRect.fromRectAndRadius(highlightRect, Radius.circular((paddleHeight - 4) / 2));
+    canvas.drawRRect(highlightRRect, highlightPaint);
+
+    // Add shadow
+    final shadowPaint = Paint()
+      ..color = Colors.black.withOpacity(0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    
+    final shadowRect = rect.inflate(1);
+    final shadowRRect = RRect.fromRectAndRadius(shadowRect, Radius.circular((paddleHeight + 2) / 2));
+    canvas.drawRRect(shadowRRect, shadowPaint);
+  }
+
+  void _drawMetallicBall(Canvas canvas, Offset center, double radius) {
+    // Base metallic color for the ball
+    final baseColor = Color(0xFFB0B0B0);
+
+    // Gradient for metallic effect
+    final gradient = RadialGradient(
+      center: Alignment(-0.3, -0.3),
+      radius: 0.8,
+      colors: [
+        Colors.white,
+        baseColor,
+        baseColor.withOpacity(0.8),
+      ],
+      stops: [0.0, 0.3, 1.0],
     );
-    canvas.drawImageRect(
-      ballImage,
-      Rect.fromLTWH(0, 0, ballImage.width.toDouble(), ballImage.height.toDouble()),
-      ballRect,
-      paint,
-    );
+
+    // Draw main ball body
+    final paint = Paint()
+      ..shader = gradient.createShader(Rect.fromCircle(center: center, radius: radius))
+      ..style = PaintingStyle.fill;
+    
+    canvas.drawCircle(center, radius, paint);
+
+    // Add highlight
+    final highlightPaint = Paint()
+      ..color = Colors.white.withOpacity(0.8)
+      ..style = PaintingStyle.fill;
+    
+    canvas.drawCircle(center.translate(-radius * 0.2, -radius * 0.2), radius * 0.2, highlightPaint);
+
+    // Add shadow
+    final shadowPaint = Paint()
+      ..color = Colors.black.withOpacity(0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    
+    canvas.drawCircle(center, radius, shadowPaint);
   }
 
   @override
