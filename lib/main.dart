@@ -286,7 +286,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     }
 
     // Ball-Paddle collision
-    double paddleTop = size.height / 2 - paddleHeight - 50;
+    double paddleTop = size.height / 2 - paddleHeight - 65;
     double paddleLeft = paddlePosition - paddleWidth / 2;
     double paddleRight = paddlePosition + paddleWidth / 2;
 
