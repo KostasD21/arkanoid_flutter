@@ -2,9 +2,7 @@
 
 A new Flutter project.
 
-<img src="doc/arkanoid.gif" align="right">
-
-![alt text](https://www.c64-wiki.com/images/thumb/6/60/Arkanoid-title.png/300px-Arkanoid-title.png)
+<img src="arkanoid.gif" align="right">
 
 ## Getting Started
 
