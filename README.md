@@ -2,4 +2,4 @@
 
 Arkanoid game developed using Flutter with Dart for Android an iOS devices.
 
-<img src="arkanoid.gif" align="right">
+<img src="arkanoid.gif" align="center">
